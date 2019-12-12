@@ -23,13 +23,12 @@ addons:
             - wine-stable
             - wine32
             - wine64
-
     coverity_scan:
         project:
             name: "rb-anssi/libecc_local"
             description: "Build submitted via Travis CI of libecc"
         notification_email: ryadbenadjila@gmail.com
-        build_command:   make
+        build_command: make
         branch_pattern: coverity_scan
 
 cache:
@@ -43,10 +42,10 @@ services:
 env:
     matrix:
       # Vanilla tests (on native plaform)
-      - BLINDING=0 COMPLETE=0 CROSS_BUILD=0 
+      - BLINDING=0 COMPLETE=0 CROSS_BUILD=0
       - BLINDING=1 COMPLETE=0 CROSS_BUILD=0
       - BLINDING=0 COMPLETE=1 CROSS_BUILD=0
-      - BLINDING=1 COMPLETE=1 CROSS_BUILD=0
+      - BLINDING=1 COMPLETE=1 CROSS_BUILD=0 COVERITY=1
       - CC=clang BLINDING=0 COMPLETE=0 CROSS_BUILD=0
       - CC=clang BLINDING=1 COMPLETE=0 CROSS_BUILD=0
       - CC=clang BLINDING=0 COMPLETE=1 CROSS_BUILD=0
@@ -185,8 +184,8 @@ env:
 
 script:
        # Coverity scan static analysis
-       - if [ "${COVERITY_SCAN_BRANCH}" == 1 ]; then make; fi
-       - if [ "${COVERITY_SCAN_BRANCH}" == 1 ]; then exit 0; fi
+       - if [ "${COVERITY_SCAN_BRANCH}" = 1 ] && [ "${COVERITY}" = 1 ]; then make; fi
+       - if [ "${COVERITY_SCAN_BRANCH}" = 1 ]; then exit 0; fi
        # Vanilla tests
        - if [ "$TRAVIS_EVENT_TYPE" = "pull_request" ]; then git fetch github refs/pull/${TRAVIS_PULL_REQUEST}/head && git checkout FETCH_HEAD; fi
        - if [ "${CROSS_BUILD}" = 0 ] && [ "${COVERITY_SCAN_BRANCH}" != 1 ]; then make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand; fi
