@@ -44,6 +44,9 @@ void ecgdsa_init_pub_key(ec_pub_key *out_pub, ec_priv_key *in_priv)
                 goto err;
         }
 
+        /* Zero init public key to be generated */
+        local_memset(out_pub, 0, sizeof(ec_pub_key));
+
 	/* Y = (x^-1)G */
 	G = &(in_priv->params->ec_gen);
 	nn_modinv(&xinv, &(in_priv->x), &(in_priv->params->ec_gen_order));
@@ -132,6 +135,10 @@ int _ecgdsa_sign_init(struct ec_sign_context *ctx)
 	 * Initialize hash context stored in our private part of context
 	 * and record data init has been done
 	 */
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+		return -1;
+        }
 	ctx->h->hfunc_init(&(ctx->sign_data.ecgdsa.h_ctx));
 	ctx->sign_data.ecgdsa.magic = ECGDSA_SIGN_MAGIC;
 
@@ -151,6 +158,10 @@ int _ecgdsa_sign_update(struct ec_sign_context *ctx,
 	ECGDSA_SIGN_CHECK_INITIALIZED(&(ctx->sign_data.ecgdsa));
 
 	/* 1. Compute h = H(m) */
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+		return -1;
+        }
 	ctx->h->hfunc_update(&(ctx->sign_data.ecgdsa.h_ctx), chunk, chunklen);
 
 	return 0;
@@ -165,15 +176,6 @@ int _ecgdsa_sign_finalize(struct ec_sign_context *ctx, u8 *sig, u8 siglen)
         nn b, binv;
         /* scalar_b is the scalar multiplication blinder */
         nn scalar_b;
-#else
-  #ifdef NO_USE_COMPLETE_FORMULAS
-        /* When we don't use blinding and we don't use complete 
-         * formulas, our scalar point multiplication must be
-         * constant time. For this purpose, the scalar k is
-         * added to a small multiple of the curve order.
-         */
-        nn k_;
-  #endif
 #endif
 	u8 e_buf[MAX_DIGEST_SIZE];
 	const ec_priv_key *priv_key;
@@ -192,6 +194,9 @@ int _ecgdsa_sign_finalize(struct ec_sign_context *ctx, u8 *sig, u8 siglen)
 	 */
 	SIG_SIGN_CHECK_INITIALIZED(ctx);
 	ECGDSA_SIGN_CHECK_INITIALIZED(&(ctx->sign_data.ecgdsa));
+
+        /* Zero init points */
+        local_memset(&kG, 0, sizeof(prj_pt));
 
 	/* Make things more readable */
 	priv_key = &(ctx->key_pair->priv_key);
@@ -224,6 +229,11 @@ int _ecgdsa_sign_finalize(struct ec_sign_context *ctx, u8 *sig, u8 siglen)
 
 	/* 1. Compute h = H(m) */
 	local_memset(e_buf, 0, hsize);
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                ret = -1;
+                goto err;
+        }
 	ctx->h->hfunc_finalize(&(ctx->sign_data.ecgdsa.h_ctx), e_buf);
 	dbg_buf_print("H(m)", e_buf, hsize);
 
@@ -245,6 +255,17 @@ int _ecgdsa_sign_finalize(struct ec_sign_context *ctx, u8 *sig, u8 siglen)
 
  restart:
 	/* 3. Get a random value k in ]0,q[ */
+#ifdef NO_KNOWN_VECTORS
+        /* NOTE: when we do not need self tests for known vectors,
+         * we can be strict about random function handler!
+         * This allows us to avoid the corruption of such a pointer.
+         */
+        /* Sanity check on the handler before calling it */
+        if(ctx->rand != nn_get_random_mod){
+                ret = -1;
+                goto err;
+        }
+#endif
 	ret = ctx->rand(&k, q);
 	if (ret) {
 		nn_uninit(&tmp2);
@@ -288,29 +309,7 @@ int _ecgdsa_sign_finalize(struct ec_sign_context *ctx, u8 *sig, u8 siglen)
 	}
 	nn_uninit(&scalar_b);
 #else
-  #ifdef NO_USE_COMPLETE_FORMULAS
-        /* When we don't use blinding and we don't use complete
-         * formulas, the underlying scalar multiplication timing is
-         * inherently dependent on the size of the scalar.
-         * In this case, we follow the countermeasure described in
-         * https://eprint.iacr.org/2011/232.pdf, namely transform
-         * the scalar in the following way:
-         *   -
-         *  | k' = k + (2 * q) if [log(k + q)] == [log(q)],
-         *  | k' = k + q otherwise.
-         *   -
-         *
-         * This countermeasure has the advantage of having a limited
-         * impact on performance.
-         */
-        nn_add(&k_, &k, q);
-        bitcnt_t k_bit_len = nn_bitlen(&k_);
-        nn_cnd_add((k_bit_len == q_bit_len), &k_, &k_, q);
-        prj_pt_mul_monty(&kG, &k_, G);
-        nn_uninit(&k_);
-  #else
         prj_pt_mul_monty(&kG, &k, G);
-  #endif
 #endif /* USE_SIG_BLINDING */
 	prj_pt_to_aff(&W, &kG);
 	prj_pt_uninit(&kG);
@@ -474,6 +473,11 @@ int _ecgdsa_verify_init(struct ec_verify_context *ctx,
 	}
 
 	/* Initialize the remaining of verify context */
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                ret = -1;
+                goto err;
+        }
 	ctx->h->hfunc_init(&(ctx->verify_data.ecgdsa.h_ctx));
 	ctx->verify_data.ecgdsa.magic = ECGDSA_VERIFY_MAGIC;
 
@@ -503,6 +507,10 @@ int _ecgdsa_verify_update(struct ec_verify_context *ctx,
 	ECGDSA_VERIFY_CHECK_INITIALIZED(&(ctx->verify_data.ecgdsa));
 
 	/* 2. Compute h = H(m) */
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+		return -1;
+        }
 	ctx->h->hfunc_update(&(ctx->verify_data.ecgdsa.h_ctx), chunk,
 			     chunklen);
 
@@ -528,6 +536,10 @@ int _ecgdsa_verify_finalize(struct ec_verify_context *ctx)
 	SIG_VERIFY_CHECK_INITIALIZED(ctx);
 	ECGDSA_VERIFY_CHECK_INITIALIZED(&(ctx->verify_data.ecgdsa));
 
+        /* Zero init points */
+        local_memset(&uG, 0, sizeof(prj_pt));
+        local_memset(&vY, 0, sizeof(prj_pt));
+
 	/* Make things more readable */
 	G = &(ctx->pub_key->params->ec_gen);
 	Y = &(ctx->pub_key->y);
@@ -537,6 +549,11 @@ int _ecgdsa_verify_finalize(struct ec_verify_context *ctx)
 	hsize = ctx->h->digest_size;
 
 	/* 2. Compute h = H(m) */
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                ret = -1;
+                goto err;
+        }
 	ctx->h->hfunc_finalize(&(ctx->verify_data.ecgdsa.h_ctx), e_buf);
 	dbg_buf_print("H(m)", e_buf, hsize);
 
@@ -592,6 +609,7 @@ int _ecgdsa_verify_finalize(struct ec_verify_context *ctx)
 	PTR_NULLIFY(q);
 	VAR_ZEROIFY(hsize);
 
+err:
 	return ret;
 }
 

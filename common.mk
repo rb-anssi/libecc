@@ -10,8 +10,13 @@ ifneq ($(APPLE),)
 FPIE_CFLAG=-fPIE
 FPIE_LDFLAGS=-pie -Wl,-z,relro,-z,now
 endif
-STACK_PROT_FLAG=-fstack-protector-strong
 endif
+
+# NOTE: with mingw, FORTIFY_SOURCE=2 must be used
+# in conjuction with stack-protector as check functions
+# are implemented in libssp
+STACK_PROT_FLAG=-fstack-protector-strong
+FORTIFY_FLAGS=-D_FORTIFY_SOURCE=2
 
 # The first goal here is to define a meaningful set of CFLAGS based on compiler,
 # debug mode, expected word size (16, 32, 64), etc. Those are then used to
@@ -27,7 +32,8 @@ endif
 #   -Wno-covered-switch-default
 #   -Wno-used-but-marked-unused
 #
-ifeq ($(CC),clang)
+CLANG :=  $(shell $(CC) -v 2>&1 | grep clang)
+ifneq ($(CLANG),)
 WARNING_CFLAGS = -Weverything -Werror \
 		 -Wno-reserved-id-macro -Wno-padded \
 		 -Wno-packed -Wno-covered-switch-default \
@@ -46,7 +52,7 @@ USER_DEFINED_LDFLAGS = $(LDFLAGS)
 endif
 
 CFLAGS ?= $(WARNING_CFLAGS) -pedantic -fno-builtin -std=c99 \
-	  -D_FORTIFY_SOURCE=2 $(STACK_PROT_FLAG) -O3
+	  $(FORTIFY_FLAGS) $(STACK_PROT_FLAG) -O3
 LDFLAGS ?=
 
 # Default AR and RANLIB if not overriden by user
@@ -157,4 +163,26 @@ endif
 # have a major performance impact
 ifeq ($(COMPLETE),0)
 CFLAGS += -DNO_USE_COMPLETE_FORMULAS
+endif
+
+# Force Double and Add always usage
+ifeq ($(ADALWAYS), 1)
+CFLAGS += -DUSE_DOUBLE_ADD_ALWAYS
+endif
+ifeq ($(ADALWAYS), 0)
+CFLAGS += -DUSE_MONTY_LADDER
+endif
+
+# Force Double and Add always usage
+ifeq ($(LADDER), 1)
+CFLAGS += -DUSE_MONTY_LADDER
+endif
+ifeq ($(LADDER), 0)
+CFLAGS += -DUSE_DOUBLE_ADD_ALWAYS
+endif
+
+# Are we sure we will not execute known
+# vectors self tests?
+ifeq ($(NOKNOWNTESTS), 1)
+CFLAGS += -DNO_KNOWN_VECTORS
 endif

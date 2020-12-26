@@ -77,3 +77,52 @@ int get_hash_sizes(hash_alg_type hash_type, u8 *digest_size, u8 *block_size)
 
 	return ret;
 }
+
+/* Here, we provide a helper that sanity checks the provided hash
+ * mapping against our constant ones.
+ */
+int hash_mapping_callbacks_sanity_check(const hash_mapping *h)
+{
+	const hash_mapping *m;
+        u8 i;
+
+        if(h == NULL){
+                goto err;
+        }
+        /* We just check is our mapping is indeed
+         * one of the registered mappings.
+         */
+	for (i = 0, m = &hash_maps[i]; m->type != UNKNOWN_HASH_ALG;
+	     m = &hash_maps[++i]) {
+                if(m->type == h->type){
+			if(!are_str_equal_nlen(m->name, h->name, MAX_HASH_ALG_NAME_LEN)){
+				goto err;
+			}
+			else if(m->digest_size != h->digest_size){
+				goto err;
+			}
+			else if(m->block_size != h->block_size){
+				goto err;
+			}
+			else if(m->hfunc_init != h->hfunc_init){
+				goto err;
+			}
+			else if(m->hfunc_update != h->hfunc_update){
+				goto err;
+			}
+			else if(m->hfunc_finalize != h->hfunc_finalize){
+				goto err;
+			}
+			else if(m->hfunc_scattered != h->hfunc_scattered){
+				goto err;
+			}
+                        else{
+                                return 0;
+                        }
+                }
+        }
+
+err:
+        return -1;
+}
+
