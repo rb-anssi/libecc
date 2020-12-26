@@ -39,6 +39,10 @@ void __ecsdsa_init_pub_key(ec_pub_key *out_pub, ec_priv_key *in_priv,
 	MUST_HAVE(out_pub != NULL);
 
 	priv_key_check_initialized_and_type(in_priv, key_type);
+
+        /* Zero init public key to be generated */
+        local_memset(out_pub, 0, sizeof(ec_pub_key));
+
         /* We use blinding for the scalar multiplication */
         ret = nn_get_random_mod(&scalar_b, &(in_priv->params->ec_gen_order));
         if (ret) {
@@ -133,21 +137,15 @@ int __ecsdsa_sign_init(struct ec_sign_context *ctx,
 #ifdef USE_SIG_BLINDING
 	/* scalar_b is the scalar multiplication blinder */
 	nn scalar_b;
-#else
-  #ifdef NO_USE_COMPLETE_FORMULAS
-        /* When we don't use blinding and we don't use complete 
-         * formulas, our scalar point multiplication must be
-         * constant time. For this purpose, the scalar k is
-         * added to a small multiple of the curve order.
-         */
-        nn k_;
-  #endif
 #endif
 	int ret;
 	nn k;
 
 	/* First, verify context has been initialized */
 	SIG_SIGN_CHECK_INITIALIZED(ctx);
+
+        /* Zero init points */
+        local_memset(&kG, 0, sizeof(prj_pt));
 
 	/* Additional sanity checks on input params from context */
 	key_pair_check_initialized_and_type(ctx->key_pair, key_type);
@@ -171,6 +169,17 @@ int __ecsdsa_sign_init(struct ec_sign_context *ctx,
 	dbg_pub_key_print("Y", &(ctx->key_pair->pub_key));
 
 	/* 1. Get a random value k in ]0, q[ */
+#ifdef NO_KNOWN_VECTORS
+        /* NOTE: when we do not need self tests for known vectors,
+         * we can be strict about random function handler!
+         * This allows us to avoid the corruption of such a pointer.
+         */
+        /* Sanity check on the handler before calling it */
+        if(ctx->rand != nn_get_random_mod){
+                ret = -1;
+                goto err;
+        }
+#endif
 	ret = ctx->rand(&k, q);
 	if (ret) {
 		ret = -1;
@@ -192,30 +201,7 @@ int __ecsdsa_sign_init(struct ec_sign_context *ctx,
 	}
 	nn_uninit(&scalar_b);
 #else
-  #ifdef NO_USE_COMPLETE_FORMULAS
-        /* When we don't use blinding and we don't use complete
-         * formulas, the underlying scalar multiplication timing is
-         * inherently dependent on the size of the scalar.
-         * In this case, we follow the countermeasure described in
-         * https://eprint.iacr.org/2011/232.pdf, namely transform
-         * the scalar in the following way:
-         *   -
-         *  | k' = k + (2 * q) if [log(k + q)] == [log(q)],
-         *  | k' = k + q otherwise.
-         *   -
-         *
-         * This countermeasure has the advantage of having a limited
-         * impact on performance.
-         */
-        nn_add(&k_, &k, q);
-        bitcnt_t k_bit_len = nn_bitlen(&k_);
-        bitcnt_t q_bit_len = nn_bitlen(q);
-        nn_cnd_add((k_bit_len == q_bit_len), &k_, &k_, q);
-        prj_pt_mul_monty(&kG, &k_, G);
-        nn_uninit(&k_);
-  #else
         prj_pt_mul_monty(&kG, &k, G);
-  #endif
 #endif
 	prj_pt_to_aff(&W_aff, &kG);
 	prj_pt_uninit(&kG);
@@ -228,11 +214,26 @@ int __ecsdsa_sign_init(struct ec_sign_context *ctx,
 	 *    - In the normal version (ECSDSA), r = h(Wx || Wy || m).
 	 *    - In the optimized version (ECOSDSA), r = h(Wx || m).
 	 */
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                ret = -1;
+                goto err;
+        }
 	ctx->h->hfunc_init(&(ctx->sign_data.ecsdsa.h_ctx));
 	fp_export_to_buf(Wx, p_len, &(W_aff.x));
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                ret = -1;
+                goto err;
+        }
 	ctx->h->hfunc_update(&(ctx->sign_data.ecsdsa.h_ctx), Wx, p_len);
 	if (!optimized) {
 		fp_export_to_buf(Wy, p_len, &(W_aff.y));
+	        /* Since we call a callback, sanity check our mapping */
+        	if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                	ret = -1;
+	                goto err;
+        	}
 		ctx->h->hfunc_update(&(ctx->sign_data.ecsdsa.h_ctx), Wy,
 				     p_len);
 	}
@@ -270,6 +271,10 @@ int __ecsdsa_sign_update(struct ec_sign_context *ctx,
 	ECSDSA_SIGN_CHECK_INITIALIZED(&(ctx->sign_data.ecsdsa));
 
 	/* 3. Compute r = H(Wx [|| Wy] || m) */
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+		return -1;
+        }
 	ctx->h->hfunc_update(&(ctx->sign_data.ecsdsa.h_ctx), chunk, chunklen);
 
 	return 0;
@@ -323,6 +328,11 @@ int __ecsdsa_sign_finalize(struct ec_sign_context *ctx, u8 *sig, u8 siglen)
 
 	/* 3. Compute r = H(Wx [|| Wy] || m) */
 	local_memset(r, 0, hsize);
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                ret = -1;
+                goto err;
+        }
 	ctx->h->hfunc_finalize(&(ctx->sign_data.ecsdsa.h_ctx), r);
 	dbg_buf_print("r", r, r_len);
 
@@ -448,6 +458,10 @@ int __ecsdsa_verify_init(struct ec_verify_context *ctx,
 	/* First, verify context has been initialized */
 	SIG_VERIFY_CHECK_INITIALIZED(ctx);
 
+        /* Zero init points */
+        local_memset(&sG, 0, sizeof(prj_pt));
+        local_memset(&eY, 0, sizeof(prj_pt));
+
 	/* Do some sanity checks on input params */
 	pub_key_check_initialized_and_type(ctx->pub_key, key_type);
 	if ((!(ctx->h)) || (ctx->h->digest_size > MAX_DIGEST_SIZE) ||
@@ -517,11 +531,26 @@ int __ecsdsa_verify_init(struct ec_verify_context *ctx,
 	 *    - In the normal version (ECSDSA), r = h(W'x || W'y || m).
 	 *    - In the optimized version (ECOSDSA), r = h(W'x || m).
 	 */
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                ret = -1;
+                goto err;
+        }
 	ctx->h->hfunc_init(&(ctx->verify_data.ecsdsa.h_ctx));
 	fp_export_to_buf(Wprimex, p_len, &(Wprime_aff.x));
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                ret = -1;
+                goto err;
+        }
 	ctx->h->hfunc_update(&(ctx->verify_data.ecsdsa.h_ctx), Wprimex, p_len);
 	if (!optimized) {
 		fp_export_to_buf(Wprimey, p_len, &(Wprime_aff.y));
+        	/* Since we call a callback, sanity check our mapping */
+	        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                	ret = -1;
+        	        goto err;
+	        }
 		ctx->h->hfunc_update(&(ctx->verify_data.ecsdsa.h_ctx),
 				     Wprimey, p_len);
 	}
@@ -565,6 +594,10 @@ int __ecsdsa_verify_update(struct ec_verify_context *ctx,
 	ECSDSA_VERIFY_CHECK_INITIALIZED(&(ctx->verify_data.ecsdsa));
 
 	/* 5. Compute r' = H(W'x [|| W'y] || m) */
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+		return -1;
+        }
 	ctx->h->hfunc_update(&(ctx->verify_data.ecsdsa.h_ctx), chunk,
 			     chunklen);
 
@@ -588,6 +621,11 @@ int __ecsdsa_verify_finalize(struct ec_verify_context *ctx)
 	r_len = ECSDSA_R_LEN(ctx->h->digest_size);
 
 	/* 5. Compute r' = H(W'x [|| W'y] || m) */
+        /* Since we call a callback, sanity check our mapping */
+        if(hash_mapping_callbacks_sanity_check(ctx->h)){
+                ret = -1;
+                goto err;
+        }
 	ctx->h->hfunc_finalize(&(ctx->verify_data.ecsdsa.h_ctx), r_prime);
 
 	/* 6. Accept the signature if and only if r and r' are the same */
@@ -604,6 +642,7 @@ int __ecsdsa_verify_finalize(struct ec_verify_context *ctx)
 	/* Clean what remains on the stack */
 	VAR_ZEROIFY(r_len);
 
+err:
 	return ret;
 }
 

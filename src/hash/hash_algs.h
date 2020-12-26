@@ -23,6 +23,8 @@
 #include "sha256.h"
 #include "sha384.h"
 #include "sha512.h"
+#include "sha512-224.h"
+#include "sha512-256.h"
 #include "sha3-224.h"
 #include "sha3-256.h"
 #include "sha3-384.h"
@@ -49,6 +51,12 @@ typedef union {
 #endif
 #ifdef SHA512_BLOCK_SIZE
 	sha512_context sha512;
+#endif
+#ifdef SHA512_224_BLOCK_SIZE
+	sha512_224_context sha512_224;
+#endif
+#ifdef SHA512_256_BLOCK_SIZE
+	sha512_256_context sha512_256;
 #endif
 #ifdef SHA3_224_BLOCK_SIZE
 	sha3_224_context sha3_224;
@@ -153,6 +161,34 @@ static const hash_mapping hash_maps[] = {
 #define MAX_HASH_ALG_NAME_LEN 7
 #endif /* MAX_HASH_ALG_NAME_LEN */
 #endif /* WITH_HASH_SHA512 */
+#ifdef WITH_HASH_SHA512_224
+	{.type = SHA512_224,	/* SHA512_224 */
+	 .name = "SHA512_224",
+	 .digest_size = SHA512_224_DIGEST_SIZE,
+	 .block_size = SHA512_224_BLOCK_SIZE,
+	 .hfunc_init = (_hfunc_init) sha512_224_init,
+	 .hfunc_update = (_hfunc_update) sha512_224_update,
+	 .hfunc_finalize = (_hfunc_finalize) sha512_224_final,
+	 .hfunc_scattered = sha512_224_scattered},
+#if (MAX_HASH_ALG_NAME_LEN < 7)
+#undef MAX_HASH_ALG_NAME_LEN
+#define MAX_HASH_ALG_NAME_LEN 7
+#endif /* MAX_HASH_ALG_NAME_LEN */
+#endif /* WITH_HASH_SHA512_224 */
+#ifdef WITH_HASH_SHA512_256
+	{.type = SHA512_256,	/* SHA512_256 */
+	 .name = "SHA512_256",
+	 .digest_size = SHA512_256_DIGEST_SIZE,
+	 .block_size = SHA512_256_BLOCK_SIZE,
+	 .hfunc_init = (_hfunc_init) sha512_256_init,
+	 .hfunc_update = (_hfunc_update) sha512_256_update,
+	 .hfunc_finalize = (_hfunc_finalize) sha512_256_final,
+	 .hfunc_scattered = sha512_256_scattered},
+#if (MAX_HASH_ALG_NAME_LEN < 7)
+#undef MAX_HASH_ALG_NAME_LEN
+#define MAX_HASH_ALG_NAME_LEN 7
+#endif /* MAX_HASH_ALG_NAME_LEN */
+#endif /* WITH_HASH_SHA512_256 */
 #ifdef WITH_HASH_SHA3_224
 	{.type = SHA3_224,	/* SHA3_224 */
 	 .name = "SHA3_224",
@@ -222,5 +258,6 @@ static const hash_mapping hash_maps[] = {
 const hash_mapping *get_hash_by_name(const char *hash_name);
 const hash_mapping *get_hash_by_type(hash_alg_type hash_type);
 int get_hash_sizes(hash_alg_type hash_type, u8 *digest_size, u8 *block_size);
+int hash_mapping_callbacks_sanity_check(const hash_mapping *h);
 
 #endif /* __HASH_ALGS_H__ */

@@ -32,6 +32,9 @@ int init_pubkey_from_privkey(ec_pub_key *pub_key, ec_priv_key *priv_key)
 	for (i = 0, sm = &ec_sig_maps[i];
 	     sm->type != UNKNOWN_SIG_ALG; sm = &ec_sig_maps[++i]) {
 		if (sm->type == priv_key->key_type) {
+			/* NOTE: since sm is initalized with a structure
+	 		 * coming from a const source, we can safely call the callback here.
+	 		 */
 			sm->init_pub_key(pub_key, priv_key);
 			ret = 0;
 			break;
@@ -74,6 +77,107 @@ const ec_sig_mapping *get_sig_by_type(ec_sig_alg_type sig_type)
 
 	return ret;
 }
+
+/* Here, we provide a helper that sanity checks the provided signature 
+ * mapping against the constant ones.
+ */
+int ec_sig_mapping_callbacks_sanity_check(const ec_sig_mapping *sig)
+{
+	const ec_sig_mapping *sm;
+	u8 i;
+
+	if(sig == NULL){
+		goto err;
+	}
+	/* We just check is our mapping is indeed
+	 * one of the registered mappings.
+	 */
+	for (i = 0, sm = &ec_sig_maps[i];
+	     sm->type != UNKNOWN_SIG_ALG; sm = &ec_sig_maps[++i]) {
+		if(sm->type == sig->type){
+			if(!are_str_equal_nlen(sm->name, sig->name, MAX_SIG_ALG_NAME_LEN)){
+				goto err;
+			}
+			else if(sm->siglen != sig->siglen){
+				goto err;
+			}
+			else if(sm->init_pub_key != sig->init_pub_key){
+				goto err;
+			}
+			else if(sm->sign_init != sig->sign_init){
+				goto err;
+			}
+			else if(sm->sign_update != sig->sign_update){
+				goto err;
+			}
+			else if(sm->sign_finalize != sig->sign_finalize){
+				goto err;
+			}
+			else if(sm->verify_init != sig->verify_init){
+				goto err;
+			}
+			else if(sm->verify_update != sig->verify_update){
+				goto err;
+			}
+			else if(sm->verify_finalize != sig->verify_finalize){
+				goto err;
+			}
+			else{
+				return 0;
+			}
+		}
+	}
+
+err:
+	return -1;
+}
+
+/* Sanity check of a signature context to see if everything seems
+ * OK.
+ */
+int ec_sig_ctx_callbacks_sanity_check(const struct ec_sign_context *sig_ctx)
+{
+	if(sig_ctx == NULL){
+		goto err;
+	}
+	if(sig_ctx->ctx_magic != SIG_SIGN_MAGIC){
+		goto err;
+	}
+	if(hash_mapping_callbacks_sanity_check(sig_ctx->h)){
+		goto err;
+	}
+	if(ec_sig_mapping_callbacks_sanity_check(sig_ctx->sig)){
+		goto err;
+	}
+	
+	return 0;
+err:
+	return -1;
+}
+
+/* Sanity check of a verification context to see if everything seems
+ * OK.
+ */
+int ec_verify_ctx_callbacks_sanity_check(const struct ec_verify_context *verify_ctx)
+{
+	if(verify_ctx == NULL){
+		goto err;
+	}
+	if(verify_ctx->ctx_magic != SIG_VERIFY_MAGIC){
+		goto err;
+	}
+	if(hash_mapping_callbacks_sanity_check(verify_ctx->h)){
+		goto err;
+	}
+	if(ec_sig_mapping_callbacks_sanity_check(verify_ctx->sig)){
+		goto err;
+	}
+	
+	return 0;
+err:
+	return -1;
+}
+
 
 /*
  * Compute generic effective signature length depending on the curve parameters,
@@ -164,11 +268,28 @@ static int _ec_sign_init(struct ec_sign_context *ctx,
 		goto err;
 	}
 
+#ifdef NO_KNOWN_VECTORS
+        /* NOTE: when we do not need self tests for known vectors,
+         * we can be strict about random function handler!
+	 * We only use our internal method to provide random integers
+	 * (which avoids honest mistakes ...).
+	 *
+         * This also allows us to avoid the corruption of such a pointer in
+	 * our signature contexts.
+         */
+	if(rand){
+		if(rand != nn_get_random_mod){
+			ret = -1;
+			goto err;
+		}
+	}
+	rand = nn_get_random_mod;
+#else
 	/* Use given random function if provided or fallback to ours */
 	if (!rand) {
 		rand = nn_get_random_mod;
 	}
-
+#endif
 	/* Sanity checks on our mappings */
 	HASH_MAPPING_SANITY_CHECK(hm);
 	SIG_MAPPING_SANITY_CHECK(sm);
@@ -180,6 +301,9 @@ static int _ec_sign_init(struct ec_sign_context *ctx,
 	ctx->sig = sm;
 	ctx->ctx_magic = SIG_SIGN_MAGIC;
 
+	/* NOTE: since sm has been previously initalized with a structure
+	 * coming from a const source, we can safely call the callback here.
+	 */
 	ret = sm->sign_init(ctx);
 
  err:
@@ -210,6 +334,11 @@ int ec_sign_update(struct ec_sign_context *ctx, const u8 *chunk, u32 chunklen)
 	SIG_MAPPING_SANITY_CHECK(ctx->sig);
 	HASH_MAPPING_SANITY_CHECK(ctx->h);
 
+	/* Since we call a callback, sanity check our contexts */
+	if(ec_sig_ctx_callbacks_sanity_check(ctx)){
+		ret = -1;
+		goto err;
+	}
 	ret = ctx->sig->sign_update(ctx, chunk, chunklen);
 
 	if (ret) {
@@ -217,6 +346,7 @@ int ec_sign_update(struct ec_sign_context *ctx, const u8 *chunk, u32 chunklen)
 		local_memset(ctx, 0, sizeof(struct ec_sign_context));
 	}
 
+err:
 	return ret;
 }
 
@@ -229,11 +359,17 @@ int ec_sign_finalize(struct ec_sign_context *ctx, u8 *sig, u8 siglen)
 	SIG_MAPPING_SANITY_CHECK(ctx->sig);
 	HASH_MAPPING_SANITY_CHECK(ctx->h);
 
+	/* Since we call a callback, sanity check our contexts */
+	if(ec_sig_ctx_callbacks_sanity_check(ctx)){
+		ret = -1;
+		goto err;
+	}
 	ret = ctx->sig->sign_finalize(ctx, sig, siglen);
 
 	/* Clear the whole context to prevent future reuse */
 	local_memset(ctx, 0, sizeof(struct ec_sign_context));
 
+err:
 	return ret;
 }
 
@@ -324,6 +460,9 @@ int ec_verify_init(struct ec_verify_context *ctx, const ec_pub_key *pub_key,
 	ctx->sig = sm;
 	ctx->ctx_magic = SIG_VERIFY_MAGIC;
 
+	/* NOTE: since sm has been previously initalized with a structure
+	 * coming from a const source, we can safely call the callback here.
+	 */
 	ret = sm->verify_init(ctx, sig, siglen);
 
  err:
@@ -345,6 +484,11 @@ int ec_verify_update(struct ec_verify_context *ctx,
 	SIG_MAPPING_SANITY_CHECK(ctx->sig);
 	HASH_MAPPING_SANITY_CHECK(ctx->h);
 
+	/* Since we call a callback, sanity check our contexts */
+	if(ec_verify_ctx_callbacks_sanity_check(ctx)){
+		ret = -1;
+		goto err;
+	}
 	ret = ctx->sig->verify_update(ctx, chunk, chunklen);
 
 	if (ret) {
@@ -352,6 +496,7 @@ int ec_verify_update(struct ec_verify_context *ctx,
 		local_memset(ctx, 0, sizeof(struct ec_verify_context));
 	}
 
+err:
 	return ret;
 }
 
@@ -363,11 +508,17 @@ int ec_verify_finalize(struct ec_verify_context *ctx)
 	SIG_MAPPING_SANITY_CHECK(ctx->sig);
 	HASH_MAPPING_SANITY_CHECK(ctx->h);
 
+	/* Since we call a callback, sanity check our contexts */
+	if(ec_verify_ctx_callbacks_sanity_check(ctx)){
+		ret = -1;
+		goto err;
+	}
 	ret = ctx->sig->verify_finalize(ctx);
 
 	/* Clear the whole context to prevent future reuse */
 	local_memset(ctx, 0, sizeof(struct ec_verify_context));
 
+err:
 	return ret;
 }
 
