@@ -23,7 +23,6 @@ addons:
             - wine-stable
             - wine32
             - wine64
-            - python2
             - python3
 
     coverity_scan:
