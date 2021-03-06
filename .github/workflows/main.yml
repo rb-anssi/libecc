@@ -8,19 +8,25 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        cc: [gcc, clang]
         blinding: [0, 1]
-        complete: [0, 1] 
+        complete: [0, 1]
+        ladder: [0, 1]
     steps:
       # Checkout repository
       - name: checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v2      
       # Run actions
-      - name: vanilla tests 
+      # Vanilla tests
+      - name: expand script tests
+      - name: vanilla tests
         env:
+          CC: ${{ matrix.cc }}
           BLINDING: ${{ matrix.blinding }}
           COMPLETE: ${{ matrix.complete }}
+          LADDER: ${{ matrix.ladder }}
         shell: bash
         run: |
-          echo $BLINDING;
-          echo $COMPLETE;
-          make && ./build/ec_self_tests vectors;
+          #
+          make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make && make clean && cd -;
+          cd src/examples/ && make clean && make && cd - && make clean;
