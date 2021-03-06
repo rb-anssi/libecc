@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           # Install stuff
-          apt install qemu-user-static wine-stable wine32 wine64;
+          sudo apt-get -y install qemu-user-static wine-stable wine32 wine64;
           # Cross build jobs
           docker pull multiarch/crossbuild;
           sh scripts/crossbuild.sh -triplet "${CROSS_TARGET}" "${CROSS_SIZE}";
