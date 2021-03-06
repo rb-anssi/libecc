@@ -8,7 +8,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        cc: [gcc, clang]
         blinding: [0, 1]
         complete: [0, 1]
         ladder: [0, 1]
@@ -24,7 +23,6 @@ jobs:
       # Vanilla tests
       - name: vanilla tests
         env:
-          CC: ${{ matrix.cc }}
           BLINDING: ${{ matrix.blinding }}
           COMPLETE: ${{ matrix.complete }}
           LADDER: ${{ matrix.ladder }}
@@ -34,14 +32,14 @@ jobs:
           CROSS_SIZE: ${{ matrix.cross_size }}
         shell: bash
         run: |
-          # Test our Python libecc expanding script;
-          # Python2;
+          # Test our Python libecc expanding script
+          # Python2
           if [ "${TEST_PYTHON_EXPAND_SCRIPT}" == 1 ]; then echo "y" | python2 scripts/expand_libecc.py --remove-all && PYTHON=python2 sh scripts/gen_curves_tests.sh && make clean && make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand; fi;
-          # Python3;
+          # Python3
           if [ "${TEST_PYTHON_EXPAND_SCRIPT}" == 1 ]; then echo "y" | python3 scripts/expand_libecc.py --remove-all && PYTHON=python3 sh scripts/gen_curves_tests.sh && make clean && make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand; fi;
-          # Clean;
+          # Clean
           if [ "${TEST_PYTHON_EXPAND_SCRIPT}" == 1 ]; then echo "y" | python2 scripts/expand_libecc.py --remove-all && make clean; fi;
-          # Vanilla tests;
+          # Vanilla tests with gcc
           if [ "${CROSS_BUILD}" = 0 ]; then make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make && make clean && cd -; fi;
           if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make && cd - && make clean; fi;
           if [ "${CROSS_BUILD}" = 0 ]; then make 16 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make 16 && make clean && cd -; fi;
@@ -58,6 +56,23 @@ jobs:
           if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make debug32 && cd - && make clean; fi;
           if [ "${CROSS_BUILD}" = 0 ]; then make debug64 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make debug64 && make clean && cd -; fi;
           if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make debug64 && cd - && make clean; fi;
+          # Vanilla tests with clang
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang cd src/examples/ && make clean && make && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang make 16 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make 16 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang cd src/examples/ && make clean && make 16 && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang make 32 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make 32 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang cd src/examples/ && make clean && make 32 && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang make 64 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make 64 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang cd src/examples/ && make clean && make 64 && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang make debug && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make debug && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang cd src/examples/ && make clean && make debug && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang make debug16 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make debug16 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang cd src/examples/ && make clean && make debug16 && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang make debug32 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make debug32 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang cd src/examples/ && make clean && make debug32 && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang make debug64 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make debug64 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then CC=clang cd src/examples/ && make clean && make debug64 && cd - && make clean; fi;
           # Cross build jobs;
           if [ "${CROSS_BUILD}" = 1 ]; then docker pull multiarch/crossbuild; fi;
           if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossbuild.sh -triplet "${CROSS_TARGET}" "${CROSS_SIZE}"; fi;
