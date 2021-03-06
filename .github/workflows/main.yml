@@ -12,6 +12,10 @@ jobs:
         blinding: [0, 1]
         complete: [0, 1]
         ladder: [0, 1]
+        test_python_expand_script: [0, 1]
+        cross_build: [0, 1]
+        cross_target: [arm-linux-gnueabi, arm-linux-gnueabihf, powerpc64le-linux-gnu, aarch64-linux-gnu, mipsel-linux-gnu, i386-apple-darwin, x86_64-apple-darwin, x86_64h-apple-darwin, i686-w64-mingw32, x86_64-w64-mingw32]
+        cross_size: [16, 32, 64]
     steps:
       # Checkout repository
       - name: checkout repository
@@ -24,11 +28,38 @@ jobs:
           BLINDING: ${{ matrix.blinding }}
           COMPLETE: ${{ matrix.complete }}
           LADDER: ${{ matrix.ladder }}
+          TEST_PYTHON_EXPAND_SCRIPT: ${{ matrix.test_python_expand_script }}
+          CROSS_BUILD: ${{ matrix.cross_build }}
+          CROSS_TARGET: ${{ matrix.cross_target }}
+          CROSS_SIZE: ${{ matrix.cross_size }}
         shell: bash
         run: |
-          # Test expansion scripts
-          echo "y" | python2 scripts/expand_libecc.py --remove-all && PYTHON=python2 sh scripts/gen_curves_tests.sh && make clean && make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand;
-          echo "y" | python3 scripts/expand_libecc.py --remove-all && PYTHON=python3 sh scripts/gen_curves_tests.sh && make clean && make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand;
-          # Nominal vanilla tests
-          make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make && make clean && cd -;
-          cd src/examples/ && make clean && make && cd - && make clean;
+          # Test our Python libecc expanding script;
+          # Python2;
+          if [ "${TEST_PYTHON_EXPAND_SCRIPT}" == 1 ]; then echo "y" | python2 scripts/expand_libecc.py --remove-all && PYTHON=python2 sh scripts/gen_curves_tests.sh && make clean && make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand; fi;
+          # Python3;
+          if [ "${TEST_PYTHON_EXPAND_SCRIPT}" == 1 ]; then echo "y" | python3 scripts/expand_libecc.py --remove-all && PYTHON=python3 sh scripts/gen_curves_tests.sh && make clean && make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand; fi;
+          # Clean;
+          if [ "${TEST_PYTHON_EXPAND_SCRIPT}" == 1 ]; then echo "y" | python2 scripts/expand_libecc.py --remove-all && make clean; fi;
+          # Vanilla tests;
+          if [ "${CROSS_BUILD}" = 0 ]; then make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then make 16 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make 16 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make 16 && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then make 32 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make 32 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make 32 && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then make 64 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make 64 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make 64 && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then make debug && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make debug && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make debug && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then make debug16 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make debug16 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make debug16 && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then make debug32 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make debug32 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make debug32 && cd - && make clean; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then make debug64 && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make debug64 && make clean && cd -; fi;
+          if [ "${CROSS_BUILD}" = 0 ]; then cd src/examples/ && make clean && make debug64 && cd - && make clean; fi;
+          # Cross build jobs;
+          if [ "${CROSS_BUILD}" = 1 ]; then docker pull multiarch/crossbuild; fi;
+          if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossbuild.sh -triplet "${CROSS_TARGET}" "${CROSS_SIZE}"; fi;
+          # Test generated cross binaries through qemu-static;
+          if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossrun.sh -triplet "${CROSS_TARGET}" "${CROSS_SIZE}"; fi;
