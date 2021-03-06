@@ -27,8 +27,8 @@
 #include <execinfo.h>
 
 #define BACKTRACE_SIZE 4096
-unsigned int backtrace_buffer_ptr = 0;
-char backtrace_buffer[BACKTRACE_SIZE];
+static unsigned int backtrace_buffer_ptr = 0;
+static char backtrace_buffer[BACKTRACE_SIZE];
 
 /* assert trapping and backtracing */
 static void assert_signal_handler(int sig)
@@ -51,11 +51,11 @@ static void assert_signal_handler(int sig)
 		memset(backtrace_buffer, 0, sizeof(backtrace_buffer)-1);\
 		backtrace_buffer_ptr = 0;\
 	}\
-} while(0);
+} while(0)
 #else
 
 #define ADD_TO_BACKTRACE(...) do {\
-} while(0);
+} while(0)
 
 #endif
 
@@ -133,7 +133,7 @@ struct dispatch_table {
 		}\
 		ptr += sizeof(struct dispatch_table);\
 	}\
-} while(0);
+} while(0)
 
 #define FIND_FUN_IN_DISPATCH_TABLE(op, function) FIND_IN_DISPATCH_TABLE(op, function, fun)
 
@@ -812,8 +812,8 @@ int main(int argc, char *argv[])
 	 */
 	nn_one(&fp_ctx_modulus);
 	fp_ctx_init_from_p(&fp_ctx_param, &fp_ctx_modulus);
-	GENERIC_TEST_FP_DECL_INIT_MAX(fp_params, &fp_ctx_param);
-	GENERIC_TEST_NN_DECL_INIT_MAX(nn_params, 0);
+	GENERIC_TEST_FP_DECL_INIT_MAX(fp_params, &fp_ctx_param)
+	GENERIC_TEST_NN_DECL_INIT_MAX(nn_params, 0)
 	u64 u_params[MAX_PARAMS];
 	void *params[MAX_PARAMS];
 	unsigned int ibuflen = BIT_LEN_WORDS(NN_MAX_BIT_LEN) * WORD_BYTES * 10;
@@ -852,7 +852,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	ibuf = malloc(ibuflen);
+	ibuf = (char*)malloc(ibuflen);
 	if (!ibuf) {
 		return -1;
 	}
@@ -972,8 +972,8 @@ int main(int argc, char *argv[])
 				/* Compare mpinv */
 				if(fp_ctx_mpinv.val[0] != fp_ctx_param.mpinv){
 					printf("\nLine %lu: Fp context import failed\n", line);
-					printf("Imported mpinv from modulus="PRINTF_WORD_HEX_FMT, &fp_ctx_r_square);
-					printf("Computed mpiv  from file   ="PRINTF_WORD_HEX_FMT, fp_ctx_param.mpinv);
+					printf("Imported mpinv from modulus=" PRINTF_WORD_HEX_FMT, fp_ctx_mpinv.val[0]);
+					printf("Computed mpiv  from file   =" PRINTF_WORD_HEX_FMT, fp_ctx_param.mpinv);
 					return -1;
 				}
 				tmp = &fp_ctx_pshift;
@@ -984,7 +984,7 @@ int main(int argc, char *argv[])
 				/* Compare p_shift */
 				if((bitcnt_t)fp_ctx_pshift.val[0] != fp_ctx_param.p_shift){
 					printf("\nLine %lu: Fp context import failed\n", line);
-					printf("Imported mpinv from modulus=%d", &fp_ctx_pshift);
+					printf("Imported mpinv from modulus=%d", (bitcnt_t)fp_ctx_pshift.val[0]);
 					printf("Computed mpiv  from file   =%d", fp_ctx_param.p_shift);
 					return -1;
 				}
@@ -1008,8 +1008,8 @@ int main(int argc, char *argv[])
 				/* Compare p_reciprocal */
 				if(fp_ctx_prec.val[0] != fp_ctx_param.p_reciprocal){
 					printf("\nLine %lu: Fp context import failed\n", line);
-					printf("Imported mpinv from modulus="PRINTF_WORD_HEX_FMT, &fp_ctx_prec);
-					printf("Computed mpiv  from file   ="PRINTF_WORD_HEX_FMT, fp_ctx_param.p_reciprocal);
+					printf("Imported mpinv from modulus=" PRINTF_WORD_HEX_FMT, fp_ctx_prec.val[0]);
+					printf("Computed mpiv  from file   =" PRINTF_WORD_HEX_FMT, fp_ctx_param.p_reciprocal);
 					return -1;
 				}
 				params[i] = &fp_ctx_param;

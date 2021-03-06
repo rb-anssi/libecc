@@ -121,7 +121,7 @@ int prj_pt_is_on_curve(prj_pt_src_t in)
 	prj_pt_to_aff(&in_aff, &in1);
 
 	/* Check that the affine coordinates are on the curve */
-	ret |= is_on_curve(&(in_aff.x), &(in_aff.y), in_aff.crv);
+	ret |= aff_pt_is_on_curve(&in_aff);
 
 	prj_pt_uninit(&in1);
 	prj_pt_uninit(&in2);
@@ -164,6 +164,31 @@ void prj_pt_to_aff(aff_pt_t out, prj_pt_src_t in)
 
 	fp_uninit(&inv);
 }
+
+/* 
+ * Get the unique Z = 1 projective point representation
+ * ("equivalent" to affine point).
+ */
+void prj_pt_unique(prj_pt_t out, prj_pt_src_t in)
+{
+	fp inv;
+
+	prj_pt_check_initialized(in);
+	MUST_HAVE(!prj_pt_iszero(in));
+
+	if(out != in){
+		prj_pt_init(out, in->crv);
+	}
+	fp_init(&inv, (in->X).ctx);
+
+	fp_inv(&inv, &(in->Z));
+	fp_mul(&(out->X), &(in->X), &inv);
+	fp_mul(&(out->Y), &(in->Y), &inv);
+	fp_one(&(out->Z));
+
+	fp_uninit(&inv);
+}
+
 
 void ec_shortw_aff_to_prj(prj_pt_t out, aff_pt_src_t in)
 {
@@ -297,6 +322,54 @@ int prj_pt_import_from_buf(prj_pt_t pt,
 	return 0;
 }
 
+/*
+ * Import a projective point from an affine point buffer with the following layout; the 2
+ * coordinates (elements of Fp) are each encoded on p_len bytes, where p_len
+ * is the size of p in bytes (e.g. 66 for a prime p of 521 bits). Each
+ * coordinate is encoded in big endian. Size of buffer must exactly match
+ * 2 * p_len.
+ */
+int prj_pt_import_from_aff_buf(prj_pt_t pt,
+			   const u8 *pt_buf,
+			   u16 pt_buf_len, ec_shortw_crv_src_t crv)
+{
+	fp_ctx_src_t ctx;
+	u16 coord_len;
+
+	ec_shortw_crv_check_initialized(crv);
+	MUST_HAVE(pt_buf != NULL);
+
+	ctx = crv->a.ctx;
+	coord_len = BYTECEIL(ctx->p_bitlen);
+
+	if (pt_buf_len != (2 * coord_len)) {
+		return -1;
+	}
+
+	fp_init_from_buf(&(pt->X), ctx, pt_buf, coord_len);
+	fp_init_from_buf(&(pt->Y), ctx, pt_buf + coord_len, coord_len);
+	/* Z coordinate is set to 1 */
+	fp_init(&(pt->Z), ctx);
+	fp_one(&(pt->Z));
+
+	/* Set the curve */
+	pt->crv = crv;
+
+	/* Mark the point as initialized */
+	pt->magic = PRJ_PT_MAGIC;
+
+	/* Check that the point is indeed on the provided curve, uninitialize it
+	 * if this is not the case.
+	 */
+	if(prj_pt_is_on_curve(pt) != 1){
+		prj_pt_uninit(pt);
+		return -1;
+	}
+
+	return 0;
+}
+
+
 /* Export a projective point to a buffer with the following layout; the 3
  * coordinates (elements of Fp) are each encoded on p_len bytes, where p_len
  * is the size of p in bytes (e.g. 66 for a prime p of 521 bits). Each
@@ -328,6 +401,34 @@ int prj_pt_export_to_buf(prj_pt_src_t pt, u8 *pt_buf, u32 pt_buf_len)
 
 	return 0;
 }
+
+/* Export a projective point to an affine point buffer with the following layout; the 2
+ * coordinates (elements of Fp) are each encoded on p_len bytes, where p_len
+ * is the size of p in bytes (e.g. 66 for a prime p of 521 bits). Each
+ * coordinate is encoded in big endian. Size of buffer must exactly match
+ * 2 * p_len.
+ */
+int prj_pt_export_to_aff_buf(prj_pt_src_t pt, u8 *pt_buf, u32 pt_buf_len)
+{
+	aff_pt tmp_aff;
+
+	prj_pt_check_initialized(pt);
+	MUST_HAVE(pt_buf != NULL);
+
+	/* The point to be exported must be on the curve */
+        MUST_HAVE(prj_pt_is_on_curve(pt) == 1);
+
+	/* Move to the affine unique representation */
+	prj_pt_to_aff(&tmp_aff, pt);
+
+	/* Export the affine point to the buffer */
+	if(aff_pt_export_to_buf(&tmp_aff, pt_buf, pt_buf_len)){
+		return -1;
+	}
+
+	return 0;
+}
+
 
 /*
  * If NO_USE_COMPLETE_FORMULAS flag is not defined addition formulas from Algorithm 1
@@ -847,7 +948,15 @@ static void _prj_pt_mul_ltr_dbl_add_always(prj_pt_t out, nn_src_t m, prj_pt_src_
 		/* mbit is m[i] */
 		mbit = nn_getbit(&m_msb_fixed, mlen);
 		/* Double: T[r[i+1]] = ECDBL(T[r[i+1]]) */
+#ifndef NO_USE_COMPLETE_FORMULAS
+                /* NOTE: in case of complete formulas, we use the
+                 * addition for doubling, incurring a small performance hit
+                 * for better SCA resistance.
+                 */
+		prj_pt_add(&T[rbit], &T[rbit], &T[rbit]);
+#else
 		prj_pt_dbl(&T[rbit], &T[rbit]);
+#endif
 		/* Add:  T[1-r[i+1]] = ECADD(T[r[i+1]],T[2]) */
 		prj_pt_add(&T[1-rbit], &T[rbit], &T[2]);
 		/* T[r[i]] = T[d[i] ^ r[i+1]] 
@@ -979,8 +1088,15 @@ static void _prj_pt_mul_ltr_ladder(prj_pt_t out, nn_src_t m, prj_pt_src_t in)
         fp_mul(&(T[rbit].Y), &(T[rbit].Y), &l);
         fp_mul(&(T[rbit].Z), &(T[rbit].Z), &l);
 	/* Initialize T[1-r[n-1]] with ECDBL(T[r[n-1]])) */
+#ifndef NO_USE_COMPLETE_FORMULAS
+       /* NOTE: in case of complete formulas, we use the
+        * addition for doubling, incurring a small performance hit
+        * for better SCA resistance.
+        */
+	prj_pt_add(&T[1-rbit], &T[rbit], &T[rbit]);
+#else
 	prj_pt_dbl(&T[1-rbit], &T[rbit]);
-
+#endif
 	/* Main loop of the Montgomery Ladder */
 	while (mlen > 0) {
 		int rbit_next;
@@ -990,7 +1106,15 @@ static void _prj_pt_mul_ltr_ladder(prj_pt_t out, nn_src_t m, prj_pt_src_t in)
 		/* mbit is m[i] */
 		mbit = nn_getbit(&m_msb_fixed, mlen);
 		/* Double: T[2] = ECDBL(T[d[i] ^ r[i+1]]) */
+#ifndef NO_USE_COMPLETE_FORMULAS
+                /* NOTE: in case of complete formulas, we use the
+                 * addition for doubling, incurring a small performance hit
+		 * for better SCA resistance.
+		 */
+		prj_pt_add(&T[2], &T[mbit ^ rbit], &T[mbit ^ rbit]);
+#else
 		prj_pt_dbl(&T[2], &T[mbit ^ rbit]);
+#endif
 		/* Add: T[1] = ECADD(T[0],T[1]) */
 		prj_pt_add(&T[1], &T[0], &T[1]);
 		/* T[0] = T[2-(d[i] ^ r[i])] */
