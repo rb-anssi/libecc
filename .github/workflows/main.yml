@@ -71,7 +71,6 @@ jobs:
       # Run actions
       # Vanilla tests
       - name: crossbuild tests
-        uses: docker
         env:
           BLINDING: ${{ matrix.blinding }}
           COMPLETE: ${{ matrix.complete }}
