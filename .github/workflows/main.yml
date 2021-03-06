@@ -14,6 +14,7 @@ jobs:
 #        ladder: [0, 1]
 #        test_python_expand_script: [0, 1]
 #        cryptofuzz: [0, 1]
+#        optflags: ["", "-O0", "-O1", "-O2"]
 #    steps:
 #      # Checkout repository
 #      - name: checkout repository
@@ -28,6 +29,7 @@ jobs:
 #          LADDER: ${{ matrix.ladder }}
 #          TEST_PYTHON_EXPAND_SCRIPT: ${{ matrix.test_python_expand_script }}
 #          CRYPTOFUZZ: ${{ matrix.cryptofuzz }}
+#          EXTRA_LIB_CFLAGS: ${{ matrix.optflags }}
 #        shell: bash
 #        run: |
 #          # Test our Python libecc expanding script
