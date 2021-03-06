@@ -89,6 +89,6 @@ jobs:
           docker pull multiarch/crossbuild;
           sh scripts/crossbuild.sh -triplet "${CROSS_TARGET}" "${CROSS_SIZE}";
           # Check for errors
-          [ -d "scripts/crossbuild_out/error_log/" ] && exit -1;
+          [ ! -z "$(ls -A scripts/crossbuild_out/error_log/)" ] && exit -1;
           # Test generated cross binaries through qemu-static;
           sh scripts/crossrun.sh -triplet "${CROSS_TARGET}" "${CROSS_SIZE}";
