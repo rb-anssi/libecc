@@ -14,11 +14,13 @@ jobs:
       # Checkout repository
       - name: checkout repository
         uses: actions/checkout@v2
-      # Runs actions
-      - name: 
+      # Run actions
+      - name: vanilla tests 
         env:
           BLINDING: ${{ matrix.blinding }}
           COMPLETE: ${{ matrix.complete }}
         shell: bash
         run: |
+          echo $BLINDING;
+          echo $COMPLETE;
           make && ./build/ec_self_tests vectors;
