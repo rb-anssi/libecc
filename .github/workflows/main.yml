@@ -14,7 +14,6 @@ jobs:
         test_python_expand_script: [0, 1]
         cross_build: [0, 1]
         cross_target: [arm-linux-gnueabi, arm-linux-gnueabihf, powerpc64le-linux-gnu, aarch64-linux-gnu, mipsel-linux-gnu, i386-apple-darwin, x86_64-apple-darwin, x86_64h-apple-darwin, i686-w64-mingw32, x86_64-w64-mingw32]
-        cross_size: [16, 32, 64]
     steps:
       # Checkout repository
       - name: checkout repository
@@ -29,7 +28,6 @@ jobs:
           TEST_PYTHON_EXPAND_SCRIPT: ${{ matrix.test_python_expand_script }}
           CROSS_BUILD: ${{ matrix.cross_build }}
           CROSS_TARGET: ${{ matrix.cross_target }}
-          CROSS_SIZE: ${{ matrix.cross_size }}
         shell: bash
         run: |
           # Test our Python libecc expanding script
@@ -75,6 +73,10 @@ jobs:
           if [ "${CROSS_BUILD}" = 0 ]; then CC=clang cd src/examples/ && make clean && make debug64 && cd - && make clean; fi;
           # Cross build jobs;
           if [ "${CROSS_BUILD}" = 1 ]; then docker pull multiarch/crossbuild; fi;
-          if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossbuild.sh -triplet "${CROSS_TARGET}" "${CROSS_SIZE}"; fi;
+          if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossbuild.sh -triplet "${CROSS_TARGET}" 16; fi;
+          if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossbuild.sh -triplet "${CROSS_TARGET}" 32; fi;
+          if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossbuild.sh -triplet "${CROSS_TARGET}" 64; fi;
           # Test generated cross binaries through qemu-static;
-          if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossrun.sh -triplet "${CROSS_TARGET}" "${CROSS_SIZE}"; fi;
+          if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossrun.sh -triplet "${CROSS_TARGET}" 16; fi;
+          if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossrun.sh -triplet "${CROSS_TARGET}" 32; fi;
+          if [ "${CROSS_BUILD}" = 1 ]; then sh scripts/crossrun.sh -triplet "${CROSS_TARGET}" 64; fi;
