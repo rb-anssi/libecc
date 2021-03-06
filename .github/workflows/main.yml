@@ -81,6 +81,7 @@ jobs:
         run: |
           # Install stuff
           sudo dpkg --add-architecture i386;
+          sudo apt-get update;
           sudo apt-get -y install qemu-user-static wine-stable wine32 wine64;
           # Cross build jobs
           docker pull multiarch/crossbuild;
