@@ -1,0 +1,24 @@
+name: libecc
+
+# Run this workflow every time a new commit pushed to your repository
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        blinding: [0, 1]
+        complete: [0, 1] 
+    steps:
+      # Checkout repository
+      - name: checkout repository
+        uses: actions/checkout@v2
+      # Runs actions
+      - name: 
+        env:
+          BLINDING: ${{ matrix.blinding }}
+          COMPLETE: ${{ matrix.complete }}
+        shell: bash
+        run: |
+          make && ./build/ec_self_tests vectors;
