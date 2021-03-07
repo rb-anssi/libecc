@@ -32,6 +32,7 @@ jobs:
           EXTRA_LIB_CFLAGS: ${{ matrix.optflags }}
           EXTRA_BIN_CFLAGS: ${{ matrix.optflags }}
         shell: bash
+        if: succeeded() || failed()
         run: |
           # Test our Python libecc expanding script
           # Python2
@@ -82,6 +83,7 @@ jobs:
           CROSS_SIZE: ${{ matrix.cross_size }}
           CRYPTOFUZZ: 1
         shell: bash
+        if: succeeded() || failed()
         run: |
           # Install stuff
           sudo dpkg --add-architecture i386;
