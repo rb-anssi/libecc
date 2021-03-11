@@ -13,7 +13,6 @@ jobs:
         blinding: [0, 1]
         complete: [0, 1]
         ladder: [0, 1]
-        test_python_expand_script: [0, 1]
         cryptofuzz: [0, 1]
         optflags: ["", "-O0", "-O1", "-O2"]
     steps:
@@ -28,7 +27,6 @@ jobs:
           BLINDING: ${{ matrix.blinding }}
           COMPLETE: ${{ matrix.complete }}
           LADDER: ${{ matrix.ladder }}
-          TEST_PYTHON_EXPAND_SCRIPT: ${{ matrix.test_python_expand_script }}
           CRYPTOFUZZ: ${{ matrix.cryptofuzz }}
           EXTRA_LIB_CFLAGS: ${{ matrix.optflags }}
           EXTRA_BIN_CFLAGS: ${{ matrix.optflags }}
@@ -36,11 +34,11 @@ jobs:
         run: |
           # Test our Python libecc expanding script
           # Python2
-          if [ "${TEST_PYTHON_EXPAND_SCRIPT}" == 1 ]; then echo "y" | python2 scripts/expand_libecc.py --remove-all && PYTHON=python2 sh scripts/gen_curves_tests.sh && make clean && make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand; fi;
+          echo "y" | python2 scripts/expand_libecc.py --remove-all && PYTHON=python2 sh scripts/gen_curves_tests.sh && make clean && make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand;
           # Python3
-          if [ "${TEST_PYTHON_EXPAND_SCRIPT}" == 1 ]; then echo "y" | python3 scripts/expand_libecc.py --remove-all && PYTHON=python3 sh scripts/gen_curves_tests.sh && make clean && make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand; fi;
+          echo "y" | python3 scripts/expand_libecc.py --remove-all && PYTHON=python3 sh scripts/gen_curves_tests.sh && make clean && make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand;
           # Clean
-          if [ "${TEST_PYTHON_EXPAND_SCRIPT}" == 1 ]; then echo "y" | python2 scripts/expand_libecc.py --remove-all && make clean; fi;
+          echo "y" | python2 scripts/expand_libecc.py --remove-all && make clean;
           # Vanilla tests
           make && ./build/ec_self_tests vectors && ./build/ec_self_tests rand && cd src/arithmetic_tests/ && make clean && make && make clean && cd -;
           cd src/examples/ && make clean && make && cd - && make clean;
