@@ -30,6 +30,7 @@ jobs:
           CRYPTOFUZZ: ${{ matrix.cryptofuzz }}
           EXTRA_LIB_CFLAGS: ${{ matrix.optflags }}
           EXTRA_BIN_CFLAGS: ${{ matrix.optflags }}
+          ASSERT_PRINT: 1
         shell: bash
         run: |
           # Test our Python libecc expanding script
